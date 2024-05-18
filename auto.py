@@ -37,7 +37,19 @@ def parse_response(response):
     Y = data["Y"]
     drag = data["Drag"]
     inputs = data["Inputs"]
-    return X, Y, drag, inputs
+    left_click = data["Left Click"]
+    right_click = data["Right Click"]
+    thoughts = data["Thoughts"]
+
+    return float(X), float(Y), drag == 'True', left_click == 'True', right_click == 'True', str(inputs), str(thoughts)
+
+def perform_actions(x, y, drag, left_click, right_click, inputs):
+    if drag: pyautogui.dragTo(x, y, button='left')
+    else: 
+        if left_click: pyautogui.click(x, y)
+        if right_click: pyautogui.click(x, y, button='right')
+
+    pyautogui.write(inputs, interval=0.1) # interval subject to change
 
 load_dotenv()
 API_KEY = os.getenv('API_KEY')
@@ -45,30 +57,46 @@ API_KEY = os.getenv('API_KEY')
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel('gemini-pro-vision')
 
-delete_screenshots()
-screenshot = pyautogui.screenshot(path)
-current_screenshot += 1
+# loop start
+for i in range(30):
+    delete_screenshots()
+    screenshot = pyautogui.screenshot(path)
+    current_screenshot += 1
 
-mouse_x = pyautogui.position()[0]
-mouse_y = pyautogui.position()[1]
+    mouse_x = pyautogui.position()[0]
+    mouse_y = pyautogui.position()[1]
 
-if not os.path.isfile(path):
-   raise SystemExit("No screenshot found")
-image = Image.open(path)
+    if not os.path.isfile(path):
+        raise SystemExit("No screenshot found")
+    image = Image.open(path)
 
-prompt = f"""The cursor\'s current position is ({mouse_x}, {mouse_y}). The screen size is 1920 x 1080. Please indicate the 
-             new x and y position for the cursor (where you want to move it to). To click and drag, indicate it by writing 'True' in the 'Drag' field.
-             If you would like to type anything please enter your inputs in the 'Inputs' field. Keep in mind however that combinations 
-             will not work and every key press should be separated by commas.
-             Expected format: 
-                {{
-                  X: *new x position*,
-                  Y: *new y position*,
-                  Drag: *True/False*,
-                  Inputs: *a, b, c*
-                }}
-             """
-response = model.generate_content([prompt, image])
+    prompt = f"""The cursor\'s current position is ({mouse_x}, {mouse_y}). The screen size is 1920 x 1080. Please indicate the 
+                new x and y position for the cursor (where you want to move it to). To left click and drag, indicate it by writing 'True' in the 'Drag' field.
+                The Left Click and Right Click fields are for if you would like to perform a click at the new cursor position.
+                If you would like to type anything please enter your inputs in the 'Inputs' field. Keep in mind however that combinations 
+                will not work and each character will be typed consecutively. In the 'Thoughts' field you should include your current thoughts and
+                what you are trying to do.
+                ***IMPORTANT*** Your goal is to navigate to chess.com and attempt to play a game!
+                Expected format: 
+                    {{
+                    X: *new x position*,
+                    Y: *new y position*,
+                    Drag: *True/False*,
+                    Left Click: *True/False*,
+                    Right Click: *True/False*,
+                    Inputs: *abc*,
+                    Thoughts: *I am trying to do...*
+                    }}
+                """
 
-print(response.text)
+    # should add error handling for this response and error handling in general
+    # maybe make it async too
+    response = model.generate_content([prompt, image])
+    response_text = response.text
+    print(response.text) # would be good to know what this response looks like when it fails
+
+    # after a response is recieved
+    x, y, drag, left_click, right_click, inputs, thoughts = parse_response(response.text)
+    print(f'GEMINI: {thoughts}') 
+    perform_actions(x, y, left_click, right_click, inputs) 
 
