@@ -4,10 +4,11 @@ TODO
     - find the best way for it to interact with the computer
     - add overlay
 Ideas:
-    - allow user to give it feedback (i.e move down more)
-    - more visible cursor
-    - draw grid on screen to make mouse movements more accurate
-
+    - allow user to give it feedback (i.e move down more) 1/2
+    - more visible cursor x
+    - draw grid on screen to make mouse movements more accurate x
+    - single action at a time
+    - ask for what cell it wants to click on instead
 Back button on browsers are located at (30, 60)
 
 """
@@ -54,22 +55,39 @@ class Auto:
         response = response.replace('json', "")
         print(response)
         data = json.loads(response)
-        X = data["X"]
-        Y = data["Y"]
-        click = data["Click"]
-        typing = data["Typing"]
-        press = data["Press"]
-        thoughts = data["Thoughts"]
+        action = ''
+        value = ''
+        match data['Operation']:
+            case 'Move To':
+                action = 'Move To' 
+                value = (data['Value'][0], data['Value'][1])
 
-        return float(X), float(Y), click=='True', str(typing), str(press).lower(), str(thoughts)
+            case 'Click':
+                action = 'Click'
+                value = (data['Value'] == True)
 
-    def perform_actions(x, y, click, typing, press):
-        pyautogui.moveTo(x, y)    
-        print(f'moving cursor to ({x},{y})')
-        if click: pyautogui.click()
-        pyautogui.write(typing, interval=0.1) # interval subject to change
-        time.sleep(1)
-        pyautogui.press(press)
+            case 'Typing':
+                action = 'Typing'
+                value = data['Value']
+
+            case 'Press':
+                action = 'Press'
+                value = data['Value']
+
+        thoughts = data['Thoughts']
+
+        return action, value, str(thoughts)
+
+    def perform_actions(action, value):
+        match action:
+            case 'Move To':
+                pyautogui.moveTo(value[0] * 38, value[1] * 21)
+            case 'Click':
+                pyautogui.click()
+            case 'Typing':
+                pyautogui.write(action, interval=0.1)
+            case 'Press':
+                pyautogui.press(action)
 
     def responses_to_string(past_responses):
         string = ""
@@ -121,31 +139,41 @@ class Auto:
         prompt = f"""
                     YOUR GOAL: {goal}
 
-                    Based on the screenshot, your goal, and any previous responses, generate the next best series of inputs.
-                    The inputs you provide will then be executed with pyautogui. When you write your thoughts, please also state the reasons
-                    behind your actions. 
-                    The screenshot you see contains a grid. Each cell of the grid is 38 x 21 pixels wide. Use that information to accurately 
-                    determine where you want to move the cursor.
-                    If you notice yourself repeating the exact same thoughts over and over, PLEASE try doing something new.
+                    You are operating a Windows computer, using the same operating system as a human.
+                    From looking at the screen, the objective, and your previous actions, take the next best series of action. 
+                    The screenshot you see contains a grid. The grid drawn over the screen is 50 cells by 50 cells. 
                     Keep in mind that 'Click' must be set to True if you wish to click on something.
                     Keep in mind that somethings take time to load and it may be best to do nothing sometimes.
-                    You can: 
-                        - Move the mouse to a new position
-                        - Choose to click
-                        - Type any keyboard inputs
-                        - Press any keyboard key for a particular operation (Ex: enter, escape, shift, backspace keys)
-                    
-                    IMPORTANT LOCATIONS:
-                        - Search bar is located at (826, 1060)
-
-                    Expected format: 
-                        {{
-                        "X": *new x position*,
-                        "Y": *new y position*,
+                    These are your possible actions: 
+                        "Move To": (x cell coordinate, y cell coordinate),
                         "Click": "True|False",
                         "Typing": *abc*,
                         "Press": *shift*
-                        "Thoughts": *I am trying to do... because...*
+                    
+                    Possible Actions: 
+                    1.
+                        {{
+                        "Operation": "Move To",
+                        "Value": [desired cell coordinate x position, desired cell coordinate y position],
+                        "Thoughts": "I am trying to do... because... (explain in depth)"
+                        }}
+                    2.
+                        {{
+                        "Operation": "Click",
+                        "Value": "True | False",
+                        "Thoughts": "I am trying to do... because... (explain in depth)"
+                        }}
+                    3. 
+                        {{
+                        "Operation": "Typing",
+                        "Value": "text to type here...",
+                        "Thoughts": "I am trying to do... because... (explain in depth)"
+                        }}
+                    4.
+                        {{
+                        "Operation": "Press",
+                        "Value": "key inputs here... (example: shift, enter, etc.)",
+                        "Thoughts": "I am trying to do... because... (explain in depth)"
                         }}
 
                     Feedback: {feedback}    
@@ -160,11 +188,11 @@ class Auto:
         Auto.previous_responses.append(response.text)
 
         # after a response is recieved
-        x, y, click, typing, press, thoughts = Auto.parse_response(response.text)
+        action, value, thoughts = Auto.parse_response(response.text)
         Auto.tts.say(thoughts)
         Auto.tts.runAndWait()
         # Auto.call_overlay(thoughts)
-        Auto.perform_actions(x, y, click, typing, press)
+        Auto.perform_actions(action, value)
         Auto.delete_screenshots()
 
 
