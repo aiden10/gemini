@@ -7,10 +7,12 @@ Ideas:
     - allow user to give it feedback (i.e move down more) 1/2
     - more visible cursor x
     - draw grid on screen to make mouse movements more accurate x
-    - single action at a time
-    - ask for what cell it wants to click on instead
-Back button on browsers are located at (30, 60)
+    - single action at a time x
+    - ask for what cell it wants to click on instead x
+    - everytime it fails, tell it not to do that and have a super long prompt
 
+    Before sending the request, prompt the user to add feedback
+    Begin recording audio from mic, if after 3 seconds no words are spoken, send the request with no feedback
 """
 import json
 import google.generativeai as genai
@@ -55,39 +57,23 @@ class Auto:
         response = response.replace('json', "")
         print(response)
         data = json.loads(response)
-        action = ''
-        value = ''
-        match data['Operation']:
-            case 'Move To':
-                action = 'Move To' 
-                value = (data['Value'][0], data['Value'][1])
-
-            case 'Click':
-                action = 'Click'
-                value = (data['Value'] == True)
-
-            case 'Typing':
-                action = 'Typing'
-                value = data['Value']
-
-            case 'Press':
-                action = 'Press'
-                value = data['Value']
-
-        thoughts = data['Thoughts']
-
-        return action, value, str(thoughts)
-
-    def perform_actions(action, value):
-        match action:
-            case 'Move To':
-                pyautogui.moveTo(value[0] * 38, value[1] * 21)
-            case 'Click':
-                pyautogui.click()
-            case 'Typing':
-                pyautogui.write(action, interval=0.1)
-            case 'Press':
-                pyautogui.press(action)
+        data = json.loads(response)
+        X = data["X"]
+        Y = data["Y"]
+        click = data["Click"]
+        typing = data["Typing"]
+        press = data["Press"]
+        thoughts = data["Thoughts"]
+        new_goal = data["New Goal"]
+        return float(X), float(Y), click=='True', str(typing), str(press).lower(), str(thoughts), str(new_goal)
+    
+    def perform_actions(x, y, click, typing, press):
+        pyautogui.moveTo(x * 38, y * 21)    
+        if click: pyautogui.click()
+        pyautogui.write(typing) # interval subject to change
+        time.sleep(0.5)
+        pyautogui.press(press)
+        time.sleep(1)
 
     def responses_to_string(past_responses):
         string = ""
@@ -137,45 +123,36 @@ class Auto:
         image = Image.open(Auto.path)
 
         prompt = f"""
+                    You are an incredibly intelligent super AI capable of world domination. However you are a goodwilled AI and you have
+                    decided to live on this device to aid in whatever goal is requested of you.
                     YOUR GOAL: {goal}
 
-                    You are operating a Windows computer, using the same operating system as a human.
-                    From looking at the screen, the objective, and your previous actions, take the next best series of action. 
+                    Look at the screenshot and determine the best action to take to achieve the goal.
+                    Try to learn from your past responses and look at the feedback (if any) to try and better accomplish the goal.
                     The screenshot you see contains a grid. The grid drawn over the screen is 50 cells by 50 cells. 
-                    Keep in mind that 'Click' must be set to True if you wish to click on something.
-                    Keep in mind that somethings take time to load and it may be best to do nothing sometimes.
-                    These are your possible actions: 
-                        "Move To": (x cell coordinate, y cell coordinate),
-                        "Click": "True|False",
-                        "Typing": *abc*,
-                        "Press": *shift*
+                    Please thoroughly analyze the screenshot and do not attempt to navigate to nonexistent things.
+                    If you are searching something, include 'enter' in the Press field to actually perform the search.
+                    You must always write a new goal. 
                     
-                    Possible Actions: 
-                    1.
+                    Expected format: 
                         {{
-                        "Operation": "Move To",
-                        "Value": [desired cell coordinate x position, desired cell coordinate y position],
-                        "Thoughts": "I am trying to do... because... (explain in depth)"
-                        }}
-                    2.
-                        {{
-                        "Operation": "Click",
-                        "Value": "True | False",
-                        "Thoughts": "I am trying to do... because... (explain in depth)"
-                        }}
-                    3. 
-                        {{
-                        "Operation": "Typing",
-                        "Value": "text to type here...",
-                        "Thoughts": "I am trying to do... because... (explain in depth)"
-                        }}
-                    4.
-                        {{
-                        "Operation": "Press",
-                        "Value": "key inputs here... (example: shift, enter, etc.)",
-                        "Thoughts": "I am trying to do... because... (explain in depth)"
+                        "X": x cell coordinate,
+                        "Y": y cell coordinate,
+                        "Click": "True|False",
+                        "Typing": "text to write...",
+                        "Press": "button to press... (example: shift, enter, escape, delete, backspace)",
+                        "Thoughts": "I am trying to do... because...",
+                        "New Goal": "new goal..."
                         }}
 
+                    Value Type Requirements:
+                    "X": (number from 0 to 50) (String)
+                    "Y": (number from 0 to 50) (String)
+                    "Click": True | False in quotations (String)
+                    "Typing": (String)
+                    "Press": button to press (String)
+                    "Thoughts": (String)
+                    "New Goal": (String)
                     Feedback: {feedback}    
                     
                     PAST RESPONSES:
@@ -188,11 +165,12 @@ class Auto:
         Auto.previous_responses.append(response.text)
 
         # after a response is recieved
-        action, value, thoughts = Auto.parse_response(response.text)
+        x, y, click, typing, press, thoughts, new_goal = Auto.parse_response(response.text)
+        if new_goal != "": goal = new_goal # update the goal 
         Auto.tts.say(thoughts)
         Auto.tts.runAndWait()
         # Auto.call_overlay(thoughts)
-        Auto.perform_actions(action, value)
+        Auto.perform_actions(x, y, click, typing, press)
         Auto.delete_screenshots()
 
 
