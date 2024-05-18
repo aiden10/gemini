@@ -32,24 +32,27 @@ def delete_screenshots():
             print('Failed to delete %s. Reason: %s' % (file_path, e))
 
 def parse_response(response):
-    response = response.strip()
+    response = response.replace('`', "").strip()
+    response = response.replace('json', "")
     print(response)
     data = json.loads(response)
     X = data["X"]
     Y = data["Y"]
-    drag = float(data["Drag"])
+    drag = int(data["Drag"])
     inputs = data["Inputs"]
-    left_click = float(data["Left Click"])
-    right_click = float(data["Right Click"])
+    left_click = int(data["Left Click"])
+    right_click = int(data["Right Click"])
     thoughts = data["Thoughts"]
 
     return float(X), float(Y), bool(drag), bool(left_click), bool(right_click), str(inputs), str(thoughts)
 
 def perform_actions(x, y, drag, left_click, right_click, inputs):
+    print(f'drag: {drag} | left_click: {left_click} | right_click: {right_click}')
     if drag: pyautogui.dragTo(x, y, button='left')
     else: 
-        if left_click: pyautogui.click(x, y)
-        if right_click: pyautogui.click(x, y, button='right')
+        pyautogui.moveTo(x, y)
+        if left_click: pyautogui.click()
+        if right_click: pyautogui.click(button='right')
     
     print(f'moving cursor to ({x},{y})')
 
@@ -62,7 +65,7 @@ genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel('gemini-pro-vision')
 
 # loop start
-for i in range(30):
+while True:
     delete_screenshots()
     screenshot = pyautogui.screenshot(path)
     current_screenshot += 1
@@ -70,17 +73,20 @@ for i in range(30):
     mouse_x = pyautogui.position()[0]
     mouse_y = pyautogui.position()[1]
 
+    print(f'current mouse pos: ({mouse_x, mouse_y})')
+
     if not os.path.isfile(path):
         raise SystemExit("No screenshot found")
     image = Image.open(path)
 
     prompt = f"""The cursor\'s current position is ({mouse_x}, {mouse_y}). The screen size is 1920 x 1080. Please indicate the 
-                new x and y position for the cursor (where you want to move it to). To left click and drag, indicate it by writing 'True' in the 'Drag' field.
+                new x and y position for the cursor (where you want to move it to). To left click and drag, indicate it by writing '1' in the 'Drag' field.
                 The Left Click and Right Click fields are for if you would like to perform a click at the new cursor position.
                 If you would like to type anything please enter your inputs in the 'Inputs' field. Keep in mind however that combinations 
                 will not work and each character will be typed consecutively. In the 'Thoughts' field you should include your current thoughts and
-                what you are trying to do. 
+                what you are trying to do. Please try to avoid doing the same thing over and over again.
                 NOTES: Always include the double quotes around the keys, this is essential for it to be valid JSON. Fields enclosed with asterisks are placeholders.
+                For "Drag", "Left Click", and "Right Click", 1 represents True and 0 represents False.
                 ***IMPORTANT*** Your goal is to navigate to chess.com and attempt to play a game!
                 Expected format: 
                     {{
