@@ -3,7 +3,13 @@ TODO
     - reprompt user for goal when current one is completed
     - find the best way for it to interact with the computer
     - add overlay
-    - add NLP
+Ideas:
+    - allow user to give it feedback (i.e move down more)
+    - more visible cursor
+    - draw grid on screen to make mouse movements more accurate
+
+Back button on browsers are located at (30, 60)
+
 """
 import json
 import google.generativeai as genai
@@ -14,6 +20,10 @@ from PIL import Image
 import time
 import pyttsx3
 from overlay import Overlay
+import cv2
+import numpy as np
+
+pyautogui.FAILSAFE = False # seems kinda dangerous
 
 class Auto:
     CURRENT_DIR = os.getcwd()
@@ -74,10 +84,35 @@ class Auto:
         Auto.overlay = Overlay(thoughts) 
         Auto.overlay.start()
 
+    def screenshot():
+        screen_width, screen_height = pyautogui.size()
+        screenshot = pyautogui.screenshot(Auto.path)
+        screen_image = np.array(screenshot) # screenshot
+        grid_image = np.zeros_like(screen_image) # grid image file
+
+        num_rows = 50
+        num_cols = 50
+        row_height = screen_height // num_rows
+        col_width = screen_width // num_cols
+
+        # Draw horizontal lines (21 high)
+        for i in range(num_rows + 1):
+            y = i * row_height
+            cv2.line(grid_image, (0, y), (screen_width, y), (255, 255, 255), 1)
+
+        # Draw vertical lines (38 wide)
+        for j in range(num_cols + 1):
+            x = j * col_width 
+            
+            cv2.line(grid_image, (x, 0), (x, screen_height), (255, 255, 255), 1)
+
+        final_image = cv2.addWeighted(screen_image, 1, grid_image, 0.5, 0) # put grid on top off screenshot
+        cv2.imwrite(Auto.path, final_image)
+
     # loop start
-    def main(goal):
+    def main(goal, feedback):
         Auto.delete_screenshots()
-        pyautogui.screenshot(Auto.path)
+        Auto.screenshot()
 
         if not os.path.isfile(Auto.path):
             raise SystemExit("No screenshot found")
@@ -87,7 +122,13 @@ class Auto:
                     YOUR GOAL: {goal}
 
                     Based on the screenshot, your goal, and any previous responses, generate the next best series of inputs.
-                    The inputs you provide will then be executed with pyautogui. Try to do different things than your past responses.
+                    The inputs you provide will then be executed with pyautogui. When you write your thoughts, please also state the reasons
+                    behind your actions. 
+                    The screenshot you see contains a grid. Each cell of the grid is 38 x 21 pixels wide. Use that information to accurately 
+                    determine where you want to move the cursor.
+                    If you notice yourself repeating the exact same thoughts over and over, PLEASE try doing something new.
+                    Keep in mind that 'Click' must be set to True if you wish to click on something.
+                    Keep in mind that somethings take time to load and it may be best to do nothing sometimes.
                     You can: 
                         - Move the mouse to a new position
                         - Choose to click
@@ -96,7 +137,6 @@ class Auto:
                     
                     IMPORTANT LOCATIONS:
                         - Search bar is located at (826, 1060)
-                        - Back button on browsers are located at (30, 60)
 
                     Expected format: 
                         {{
@@ -105,9 +145,11 @@ class Auto:
                         "Click": "True|False",
                         "Typing": *abc*,
                         "Press": *shift*
-                        "Thoughts": *I am trying to do...*
+                        "Thoughts": *I am trying to do... because...*
                         }}
 
+                    Feedback: {feedback}    
+                    
                     PAST RESPONSES:
                     """ + Auto.responses_to_string(Auto.previous_responses)
 
