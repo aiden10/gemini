@@ -32,22 +32,26 @@ def delete_screenshots():
             print('Failed to delete %s. Reason: %s' % (file_path, e))
 
 def parse_response(response):
+    response = response.strip()
+    print(response)
     data = json.loads(response)
     X = data["X"]
     Y = data["Y"]
-    drag = data["Drag"]
+    drag = float(data["Drag"])
     inputs = data["Inputs"]
-    left_click = data["Left Click"]
-    right_click = data["Right Click"]
+    left_click = float(data["Left Click"])
+    right_click = float(data["Right Click"])
     thoughts = data["Thoughts"]
 
-    return float(X), float(Y), drag == 'True', left_click == 'True', right_click == 'True', str(inputs), str(thoughts)
+    return float(X), float(Y), bool(drag), bool(left_click), bool(right_click), str(inputs), str(thoughts)
 
 def perform_actions(x, y, drag, left_click, right_click, inputs):
     if drag: pyautogui.dragTo(x, y, button='left')
     else: 
         if left_click: pyautogui.click(x, y)
         if right_click: pyautogui.click(x, y, button='right')
+    
+    print(f'moving cursor to ({x},{y})')
 
     pyautogui.write(inputs, interval=0.1) # interval subject to change
 
@@ -75,17 +79,18 @@ for i in range(30):
                 The Left Click and Right Click fields are for if you would like to perform a click at the new cursor position.
                 If you would like to type anything please enter your inputs in the 'Inputs' field. Keep in mind however that combinations 
                 will not work and each character will be typed consecutively. In the 'Thoughts' field you should include your current thoughts and
-                what you are trying to do.
+                what you are trying to do. 
+                NOTES: Always include the double quotes around the keys, this is essential for it to be valid JSON. Fields enclosed with asterisks are placeholders.
                 ***IMPORTANT*** Your goal is to navigate to chess.com and attempt to play a game!
                 Expected format: 
                     {{
-                    X: *new x position*,
-                    Y: *new y position*,
-                    Drag: *True/False*,
-                    Left Click: *True/False*,
-                    Right Click: *True/False*,
-                    Inputs: *abc*,
-                    Thoughts: *I am trying to do...*
+                    "X": *new x position*,
+                    "Y": *new y position*,
+                    "Drag": *1 or 0*,
+                    "Left Click": *1 or 0*,
+                    "Right Click": *1 or 0*,
+                    "Inputs": *abc*,
+                    "Thoughts": *I am trying to do...*
                     }}
                 """
 
@@ -93,10 +98,10 @@ for i in range(30):
     # maybe make it async too
     response = model.generate_content([prompt, image])
     response_text = response.text
-    print(response.text) # would be good to know what this response looks like when it fails
+    # print(response.text) # would be good to know what this response looks like when it fails
 
     # after a response is recieved
     x, y, drag, left_click, right_click, inputs, thoughts = parse_response(response.text)
     print(f'GEMINI: {thoughts}') 
-    perform_actions(x, y, left_click, right_click, inputs) 
+    perform_actions(x, y, drag, left_click, right_click, inputs) 
 
