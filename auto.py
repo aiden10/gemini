@@ -1,7 +1,7 @@
 """
 TODO 
     - reprompt user for goal when current one is completed
-    - find the best way for it to interact with the computer
+    - find the best way for it to interact with the computer (kinda impossible)
     - add overlay
 Ideas:
     - allow user to give it feedback (i.e move down more) 1/2
@@ -25,13 +25,18 @@ import pyttsx3
 from overlay import Overlay
 import cv2
 import numpy as np
+from playsound import playsound
 
 pyautogui.FAILSAFE = False # seems kinda dangerous
 
 class Auto:
     CURRENT_DIR = os.getcwd()
     screenshots_dir = os.path.join(CURRENT_DIR, 'screenshots')
+    sounds_dir = os.path.join(CURRENT_DIR, 'sounds')
     path = os.path.join(screenshots_dir, f"screenshot.png")
+    response_sound_path = os.path.join(sounds_dir, f"response.mp3")
+    activate_sound_path = os.path.join(sounds_dir, f"voice_activate.mp3")
+    shutter_sound_path = os.path.join(sounds_dir, f"shutter.mp3")
     previous_responses = []
     overlay = None
     tts = pyttsx3.init()
@@ -112,6 +117,7 @@ class Auto:
 
         final_image = cv2.addWeighted(screen_image, 1, grid_image, 0.5, 0) # put grid on top off screenshot
         cv2.imwrite(Auto.path, final_image)
+        playsound(Auto.shutter_sound_path)
 
     # loop start
     def main(goal, feedback):
@@ -133,7 +139,11 @@ class Auto:
                     Please thoroughly analyze the screenshot and do not attempt to navigate to nonexistent things.
                     If you are searching something, include 'enter' in the Press field to actually perform the search.
                     You must always write a new goal. 
+                    If your thoughts have repeatedly been the same, do something else.
                     
+                    Locations:
+                    Search bar: (24, 50)
+
                     Expected format: 
                         {{
                         "X": x cell coordinate,
@@ -163,14 +173,14 @@ class Auto:
         print('generating response...')
         response = Auto.model.generate_content([prompt, image])
         Auto.previous_responses.append(response.text)
+        playsound(Auto.response_sound_path)
 
         # after a response is recieved
         x, y, click, typing, press, thoughts, new_goal = Auto.parse_response(response.text)
         if new_goal != "": goal = new_goal # update the goal 
         Auto.tts.say(thoughts)
         Auto.tts.runAndWait()
-        # Auto.call_overlay(thoughts)
         Auto.perform_actions(x, y, click, typing, press)
         Auto.delete_screenshots()
-
+        return thoughts
 
